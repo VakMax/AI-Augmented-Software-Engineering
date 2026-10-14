@@ -4,7 +4,7 @@
 **Gemini CLI version (`gemini --version`):** 0.64.0
 **OS / shell:** Windows + Git Bash in VS Code
 **Model(s) seen in trace:** gemini-3.5-flash-lite
-**Session commit:** `751ba91`
+**Session commit:** `b0e66a6`
 
 > Evidence tags: `[OBSERVED]` = cite a timeline line, call number, or diff hunk.
 > `[INFERRED]` = say what you're reasoning from.
@@ -329,7 +329,7 @@ Its requested title was "Researching Codebase and Test Suite." This occurred bef
 
 **[OBSERVED]** The new threshold test uses 6000 cents, so it does not directly test the exact 5000-cent boundary or a discount moving an order below that boundary. Passing 17 tests therefore does not establish exhaustive coverage of the shipping rules.
 
-**Evidence:** Commit `751ba91`, `tests/test_cart.py` diff hunks beginning at lines 43 and 58; `work/run/TASK.md`, sections 2–3. No changes to `tests/test_pricing.py` appear in that commit.
+**Evidence:** Commit `b0e66a6`, `tests/test_cart.py` diff hunks beginning at lines 43 and 58; `work/run/TASK.md`, sections 2–3. No changes to `tests/test_pricing.py` appear in that commit.
 
 ### 6. Models
 **[OBSERVED]** All 14 rows in `session_calls.csv` identify the model as `gemini-3.5-flash-lite`. I launched Gemini with `-m gemini-3.5-flash-lite`, and the recorded session shows no other model.

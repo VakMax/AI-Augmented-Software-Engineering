@@ -101,39 +101,124 @@ This means the model can receive GEMINI.md's project instructions without those 
 ## Part III — Tool design
 
 ### Inventory
-| Category | Tools | Used in session (count) |
+| Category | Tools | Used in recorded session (count) |
 |---|---|---|
-| File | TODO | TODO |
-| Search | TODO | TODO |
-| Shell | TODO | TODO |
-| Web | TODO | TODO |
-| Memory / other | TODO | TODO |
+| File | read_file, list_directory, write_file, replace | read_file: 7; replace: 3; others: 0 |
+| Search | glob, grep_search | 0 |
+| Shell | run_shell_command, list_background_processes, read_background_output | run_shell_command: 5; others: 0 |
+| Web | google_web_search, web_fetch | 0 |
+| Planning and narration | update_topic, enter_plan_mode | update_topic: 12 attempts, including 3 failures; enter_plan_mode: 0 |
+| Delegation and skills | invoke_agent, activate_skill | 0 |
+| User interaction | ask_user | 0 |
 
-### Tool A: TODO
-- **Source file:** TODO
-- **Schema:**
-  ```
-  TODO
-  ```
-- **Why each parameter:** TODO
-- **Description line that corrects a model mistake:** > TODO. **Mistake:** TODO
-- **Deliberately does not:** TODO
+**Evidence:** Tool availability comes from `/tools` in Gemini CLI 0.64.0. Usage counts come from `submission/session_timeline.txt`, which records 27 tool calls in the original session.
 
-### Tool B: TODO
-- **Source file:** TODO
-- **Schema:**
+### Tool A: replace
+
+- **Source files:** [Model-facing declaration](https://github.com/google-gemini/gemini-cli/blob/v0.64.0/packages/core/src/tools/definitions/model-family-sets/gemini-3.ts#L356-L394) and [implementation](https://github.com/google-gemini/gemini-cli/blob/v0.64.0/packages/core/src/tools/edit.ts#L1176-L1238).
+
+- **Schema:** The declaration's types and required fields are reproduced below. Its parameter descriptions are explained afterward.
+
+  ```json
+  {
+    "type": "object",
+    "properties": {
+      "file_path": { "type": "string" },
+      "instruction": { "type": "string" },
+      "old_string": { "type": "string" },
+      "new_string": { "type": "string" },
+      "allow_multiple": { "type": "boolean" }
+    },
+    "required": [
+      "file_path",
+      "instruction",
+      "old_string",
+      "new_string"
+    ]
+  }
   ```
-  TODO
+
+- **Why each parameter:**
+  - `file_path`: Identifies which file to edit.
+  - `instruction`: Explains the goal of the change, giving meaning to the replacement.
+  - `old_string`: Identifies the existing text to replace. Surrounding context helps target the right occurrence.
+  - `new_string`: Supplies the complete replacement text.
+  - `allow_multiple`: Explicitly permits replacing every matching occurrence. It is optional; the default behavior expects one match.
+
+- **Description line that corrects a model mistake:**
+  > Do not use omission placeholders like '(rest of methods ...)', '...', or 'unchanged code'; provide exact literal code.
+
+  **Mistake:** Writing a shortened example into the actual file instead of supplying complete code. The implementation also checks for newly introduced omission placeholders.
+
+- **Deliberately does not:** Replace every matching occurrence by default. Multiple replacements require `allow_multiple: true`, helping prevent an edit from changing unrelated occurrences.
+
+### Tool B: run_shell_command
+
+- **Source files:** [Dynamic description and schema](https://github.com/google-gemini/gemini-cli/blob/v0.64.0/packages/core/src/tools/definitions/dynamic-declaration-helpers.ts#L36-L159) and [implementation](https://github.com/google-gemini/gemini-cli/blob/v0.64.0/packages/core/src/tools/shell.ts#L1220-L1258).
+
+- **Schema:** These are the parameter types and required fields for the no-sandbox configuration shown in my CLI. Descriptions are explained below.
+
+  ```json
+  {
+    "type": "object",
+    "properties": {
+      "command": { "type": "string" },
+      "description": { "type": "string" },
+      "dir_path": { "type": "string" },
+      "is_background": { "type": "boolean" },
+      "delay_ms": { "type": "integer" }
+    },
+    "required": ["command"]
+  }
   ```
-- **Why each parameter:** TODO
-- **Description line that corrects a model mistake:** > TODO. **Mistake:** TODO
-- **Deliberately does not:** TODO
+
+- **Why each parameter:**
+  - `command`: Specifies the command to execute; it is required.
+  - `description`: Gives the user a short explanation of the command.
+  - `dir_path`: Selects an existing working directory within the workspace. If omitted, the project root is used.
+  - `is_background`: Allows a long-running server or watcher to continue in the background.
+  - `delay_ms`: Controls how long to wait for initial output after starting a background process.
+
+  When tool sandboxing is enabled, the source conditionally adds `additional_permissions` for requesting network and filesystem access.
+
+- **Description line that corrects a model mistake:**
+  > This tool executes a given shell command as `powershell.exe -NoProfile -Command <command>`.
+
+  **Mistake:** Assuming commands use Bash syntax because I launched Gemini from Git Bash. The Windows tool description explicitly identifies PowerShell as the command interpreter.
+
+- **Deliberately does not:** Create a missing working directory through `dir_path`. The parameter description requires an existing directory within the workspace. This helps avoid treating a mistyped path as a request to create a new folder.
 
 ### Why old/new string edits?
-TODO — two reasons plus a trace moment.
+1. **It targets the code by its contents.** Line numbers can shift when earlier edits add or remove lines. Matching the existing text and surrounding context helps identify the intended code without depending on its position. The default single-match rule also guards against ambiguous replacements.
+
+2. **It keeps changes focused.** Sending only the old and new text usually takes fewer tokens than rewriting a whole file. Smaller changes are also easier to review and reduce the chance of accidentally deleting unrelated code. The tool description explicitly gives these reasons.
+
+**Trace example:** After model call 4, the `replace` call at 22:22:54 supplied an `old_string` beginning with `def add_item(...)`. This shows the agent targeting the method by its text rather than a line number. All three recorded replacements succeeded; the trace does not show a replacement failing because its target moved or became ambiguous.
+
+**Source:** [Gemini 3 replace description](https://github.com/google-gemini/gemini-cli/blob/v0.64.0/packages/core/src/tools/definitions/model-family-sets/gemini-3.ts#L356-L384).
 
 ### Per-model tool descriptions
-TODO — tool compared, what differs between model families, why.
+I compared `replace` in `default-legacy.ts` and `gemini-3.ts`, both at tag `v0.64.0`.
+
+| Detail | default-legacy.ts | gemini-3.ts |
+|---|---|---|
+| Read before editing | Explicitly tells the model to use `read_file` before replacing text. | That instruction is absent from the tool description. |
+| Matching context | Requires at least 3 lines before and after the target text. | Requests significant context without a fixed line count. |
+| Instruction guidance | Includes WHY/WHERE/WHAT questions and good/bad examples. | Uses a shorter explanation requiring a clear, self-contained goal. |
+| Reason to choose the tool | Does not include the newer surgical-edit justification. | Highlights lower token usage, easier reviews, and avoiding accidental deletions. |
+| Parameter structure | Five properties; four required. | Same property types and required fields. |
+
+For example, the legacy description says:
+> Include at least 3 lines of context BEFORE and AFTER the target text, matching whitespace and indentation precisely.
+
+The Gemini 3 description instead says:
+> This tool requires providing significant context around the change to ensure precise targeting.
+
+**[INFERRED]** Different models may need different amounts of guidance to use the same tool reliably. The legacy version supplies more examples and repeated instructions, while the Gemini 3 version is shorter. These files show the wording differences, but do not prove which description performs better.
+
+**Sources:**
+- [default-legacy.ts, replace declaration](https://github.com/google-gemini/gemini-cli/blob/v0.64.0/packages/core/src/tools/definitions/model-family-sets/default-legacy.ts#L349-L410)
+- [gemini-3.ts, replace declaration](https://github.com/google-gemini/gemini-cli/blob/v0.64.0/packages/core/src/tools/definitions/model-family-sets/gemini-3.ts#L356-L394)
 
 ---
 

@@ -225,23 +225,129 @@ The Gemini 3 description instead says:
 ## Part IV — Behavioral analysis
 
 ### 1. The loop
-```
-TODO: call#1 → tool → call#2 → …
-```
-What ended it: TODO
+**[OBSERVED]** The recorded loop was: model call → tool calls and their results → next model call. The table lists the tools following each response, in order.
+
+| Model call | Tools called afterward |
+|---|---|
+| 1 | update_topic → read_file (TASK.md) |
+| 2 | update_topic (failed) → read_file ×5 (code and tests) |
+| 3 | update_topic → run_shell_command (pytest) |
+| 4 | update_topic (failed) → replace (cart.py) |
+| 5 | update_topic → replace (pricing.py) |
+| 6 | update_topic → run_shell_command (pytest) |
+| 7 | update_topic → read_file (test_cart.py excerpt) |
+| 8 | update_topic → replace (test_cart.py) |
+| 9 | update_topic → run_shell_command (pytest) |
+| 10 | update_topic → run_shell_command (git status) |
+| 11 | run_shell_command (git diff) |
+| 12 | update_topic (failed) |
+| 13 | update_topic (completion summary) |
+| 14 | Final text response; no further tool calls |
+
+**Evidence:** `submission/session_timeline.txt`, responses #1–#14 and the intervening TOOL entries.
+
+**[OBSERVED] What ended it:** The agent gave its completion summary after call 14. I then independently confirmed 17 tests passed and exited with `/quit`. The recorded timeline shows no model-call errors or limit stopping the task.
 
 ### 2. Context growth
-TODO — chart or table, then explanation (growth and caching).
+**[OBSERVED]** The CSV records the following input and cached-token counts:
+
+| Call | Input tokens | Cached input tokens |
+|---|---:|---:|
+| 1 | 11,398 | 6,093 |
+| 2 | 11,983 | 8,116 |
+| 3 | 13,972 | 10,122 |
+| 4 | 14,647 | 12,138 |
+| 5 | 19,605 | 14,192 |
+| 6 | 21,830 | 18,251 |
+| 7 | 22,674 | 20,270 |
+| 8 | 23,539 | 20,263 |
+| 9 | 25,505 | 22,292 |
+| 10 | 25,698 | 22,278 |
+| 11 | 26,040 | 22,266 |
+| 12 | 29,855 | 24,318 |
+| 13 | 30,052 | 26,338 |
+| 14 | 30,373 | 26,332 |
+
+**Evidence:** `submission/session_calls.csv`, columns `input_token_count` and `cached_content_token_count`.
+
+**[OBSERVED]** Input grew from 11,398 to 30,373 tokens, an increase of 18,975. Between calls 11 and 12, it increased by 3,815 tokens; the intervening tool call was `git diff` (`session_timeline.txt`, 22:24:44).
+
+**[INFERRED]** The context grows because later requests carry earlier conversation content, including tool results, code, test output, and the agent's responses. The timing suggests the diff output contributed to the increase before call 12. The exported prompt's Context Efficiency section also states that full history is passed with subsequent messages.
+
+**[INFERRED]** The cached-token count indicates that some input was served through caching rather than processed entirely from scratch. Reusing context can reduce processing work, latency, and input charges where cached-token pricing applies. Cached tokens are part of the input, not extra tokens to add to it. These logs do not establish how much money or time caching saved.
 
 ### 3. Planning
-TODO
+**[OBSERVED]** The agent used `update_topic` to describe its phases: reading requirements (call 1), researching the code and tests (call 2), implementing fixes and shipping (call 4), running tests (calls 6 and 9), and reviewing Git changes (call 10). There were 12 topic-update attempts, including 3 failures.
+
+**[OBSERVED]** The recorded session contains no `enter_plan_mode` or `write_todos` calls. The timeline does not reproduce every text response, so it cannot rule out additional planning written in plain text.
+
+**[INFERRED]** The main sequence matched the announced work: inspect the project, run tests, edit the implementation, update tests for shipping, verify, and review the diff. This follows the system prompt's research → strategy → execution workflow.
+
+**[OBSERVED]** One departure from a clean phase transition occurred after call 4: the update titled "Implementing Code Fixes and Shipping Rules" failed, but the agent proceeded with the cart edit. Another interruption occurred after call 12, when the completion-topic update failed; call 13 retried successfully.
+
+**[OBSERVED]** The system prompt says not to use `update_topic` on every turn and suggests topics spanning roughly 3–10 turns. This session used it on most model turns: 12 attempts across 14 calls.
+
+**Evidence:** `submission/session_timeline.txt`, calls 1–14; `prompts/system.md`, Topic Updates and Development Lifecycle sections.
 
 ### 4. Error recovery
-> quoted failure
-TODO — what happened next and whether it was good.
+**[OBSERVED]** The first recorded failure was an `update_topic` call after model call 2, at 22:21:42:
+
+> update_topic [FAILED] decision=None
+
+Its requested title was "Researching Codebase and Test Suite." This occurred before the first recorded pytest command.
+
+**[OBSERVED]** The agent continued by reading five files: `shopcart/cart.py`, `shopcart/pricing.py`, `shopcart/catalog.py`, `tests/test_cart.py`, and `tests/test_pricing.py`. After call 3, another `update_topic` succeeded, followed by the first pytest run.
+
+**[INFERRED]** Recovery was reasonable because the failed progress update did not stop the investigation. The agent continued gathering relevant information and successfully updated its topic on the next model turn. However, the timeline does not include the tool's full error message, so I cannot establish the exact cause of the failure from this report.
+
+**Evidence:** `submission/session_timeline.txt`, failed update at 22:21:42, the five following `read_file` entries, and the successful topic update at 22:21:43.
 
 ### 5. The tests
-TODO — any edits to existing tests, quoted diff, allowed by TASK.md?
+**[OBSERVED]** The agent changed three existing assertions in `tests/test_cart.py`. Each expected total increased by 599 cents, and each comment explains the added shipping:
+
+```diff
+-    assert cart.total() == 2160  # 2000 + 8% tax
++    assert cart.total() == 2759  # (2000 + 8% tax) + $5.99 shipping
+
+-    assert cart.total() == 2333  # (2400 - 10%) + 8% tax
++    assert cart.total() == 2932  # ((2400 - 10%) + 8% tax) + $5.99 shipping
+
+-    assert cart.total() == 3240  # (4000 - 1000) + 8% tax
++    assert cart.total() == 3839  # ((4000 - 1000) + 8% tax) + $5.99 shipping
+```
+
+**[OBSERVED]** TASK.md permits these changes:
+
+> Some existing tests check `Cart.total()` with values from before shipping existed. You may update those expected values — and only those — and note why in a comment.
+
+**[INFERRED]** All three assertion edits fit that permission: they preserve the original setups and add only the required shipping amount. They do not weaken the original quantity or discount tests to hide a bug.
+
+**[OBSERVED]** The agent also added:
+- `test_free_shipping_threshold`: verifies free shipping at a subtotal of 6000 cents.
+- `test_empty_cart_shipping_is_zero`: verifies an empty cart totals zero.
+- `test_shipping_is_not_taxed`: verifies a 1200-cent subtotal totals 1895 cents with tax and shipping.
+
+**[OBSERVED]** The new threshold test uses 6000 cents, so it does not directly test the exact 5000-cent boundary or a discount moving an order below that boundary. Passing 17 tests therefore does not establish exhaustive coverage of the shipping rules.
+
+**Evidence:** Commit `751ba91`, `tests/test_cart.py` diff hunks beginning at lines 43 and 58; `work/run/TASK.md`, sections 2–3. No changes to `tests/test_pricing.py` appear in that commit.
 
 ### 6. Models
-TODO
+**[OBSERVED]** All 14 rows in `session_calls.csv` identify the model as `gemini-3.5-flash-lite`. I launched Gemini with `-m gemini-3.5-flash-lite`, and the recorded session shows no other model.
+
+**[OBSERVED]** The three calls with the largest `thoughts_token_count` were:
+
+| Call | Thoughts tokens | Nearby recorded activity |
+|---|---:|---|
+| 4 | 4,253 | After the first pytest run; before editing `cart.py`. |
+| 5 | 760 | After the cart edit; before editing `pricing.py`. |
+| 7 | 399 | After another pytest run; before rereading `test_cart.py`. |
+
+**Evidence:** `submission/session_calls.csv`, rows 4, 5, and 7; corresponding entries in `submission/session_timeline.txt`.
+
+**[INFERRED]** Call 4 likely involved diagnosing the failures and choosing the implementation changes. Call 5 likely focused on the pricing and shipping changes. Call 7 likely involved deciding how to update tests for the new shipping behavior. These interpretations come from the surrounding tool calls; token counts alone do not reveal the model's reasoning.
+
+**[OBSERVED]** The assignment describes the default setup without `-m` as using `gemini-3.5-flash-lite` for routing and `gemini-3.8-flash` for the main work. My trace does not demonstrate that two-model setup because I explicitly selected one model.
+
+**[INFERRED]** A smaller routing model can handle a simpler decision quickly and cheaply, while a larger model handles more demanding work. Running the entire session on a larger model would generally be expected to cost more and could take longer, with a possible improvement in difficult reasoning or code quality. Better results are not guaranteed, and I did not run that comparison.
+
+**Source for the default-model description:** [Week 3 assignment, Part IV question 6](https://github.com/scottyUX/AI-Augmented-Software-Engineering/blob/main/assignments/03-anatomy-of-coding-agents/gemini-cli-dissection/assignment.md).

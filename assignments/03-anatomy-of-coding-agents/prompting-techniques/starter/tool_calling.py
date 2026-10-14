@@ -26,11 +26,14 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_order_status",
-            "description": "",  # TODO
+            "description": "Look up the current status of a customer's order using its order ID. Call this tool before answering questions about an order's status.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "order_id": {"type": "string", "description": ""},  # TODO
+                    "order_id": {
+                        "type": "string",
+                        "description": "The order ID extracted from the customer's message, passed as a string. Preserve the ID exactly; do not invent one."
+                    },
                 },
                 "required": ["order_id"],
             },

@@ -18,7 +18,24 @@ POLICY = """Refund policy:
 """
 
 # TODO: Fill this in! Encourage step-by-step reasoning, ending with DECISION: YES/NO.
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """
+Evaluate the customer's refund request using the supplied policy.
+
+Work through the policy requirements step by step:
+1. Check whether the purchase is within the allowed refund period.
+2. Check whether the item meets the condition requirement.
+3. Check whether it is a final-sale item, which cannot be refunded.
+
+Give a short explanation of the checks. Approve a refund only when
+the request meets all policy requirements. Do not invent order details
+or exceptions to the policy.
+
+End with exactly one of these lines:
+DECISION: YES
+DECISION: NO
+
+Do not put any text after the final decision line.
+"""
 
 CASES = [
     ("Bought 10 days ago, unused, not final sale.", "YES"),

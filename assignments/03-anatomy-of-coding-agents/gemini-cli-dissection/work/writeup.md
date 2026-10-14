@@ -1,10 +1,10 @@
 # Week 3 Writeup — Inside a Coding Agent
 
-**Name:** TODO
-**Gemini CLI version (`gemini --version`):** TODO
-**OS / shell:** TODO (e.g. macOS + zsh, Windows + Git Bash)
-**Model(s) seen in trace:** TODO
-**Session commit:** `TODO-sha`
+**Name:** Maxim Vakulchik
+**Gemini CLI version (`gemini --version`):** 0.64.0
+**OS / shell:** Windows + Git Bash in VS Code
+**Model(s) seen in trace:** gemini-3.5-flash-lite
+**Session commit:** `751ba91`
 
 > Evidence tags: `[OBSERVED]` = cite a timeline line, call number, or diff hunk.
 > `[INFERRED]` = say what you're reasoning from.
@@ -13,15 +13,15 @@
 
 ## Part I — Session
 
-**Narrative (one paragraph):** TODO
+**Narrative (one paragraph):** I gave Gemini the required prompt and let it work without giving it hints. It read TASK.md, inspected the code and tests, and ran pytest before making changes (calls 1–3). It then fixed the code, added shipping, and updated the tests, running them again as it went (calls 4–9). The trace also recorded three failed update_topic calls, even though none of the model calls failed. Gemini finished with a summary of its changes, and I checked the tests myself in a separate terminal: all 17 passed.
 
 | Metric | Value |
 |---|---|
-| User prompts | TODO |
-| Model calls | TODO |
-| Tool calls (failed) | TODO (TODO) |
-| Final `pytest` result | TODO |
-| Did you step in? When / what? | TODO |
+| User prompts | 1 |
+| Model calls | 14 |
+| Tool calls (failed) | 27 (3) |
+| Final `pytest` result | 17 passed in 0.03s in my independent check |
+| Did you step in? When / what? | No extra prompts or hints. I only approved tool calls and ran the final tests separately. |
 
 ---
 

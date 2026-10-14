@@ -13,7 +13,35 @@ MODEL = "llama3.1:8b"
 NUM_RUNS = 5
 
 # TODO: Fill this in! Include a few labeled examples (k-shot) in the system prompt.
-YOUR_SYSTEM_PROMPT = ""
+YOUR_SYSTEM_PROMPT = """
+Classify customer support messages using exactly one label:
+billing, shipping, returns, technical, or other.
+
+billing: payment problems, charges, or invoices.
+shipping: delivery status, delays, or missing packages.
+returns: sending products back, exchanges, or product refunds.
+technical: errors or problems using the website or app.
+other: messages that do not fit those categories.
+
+Examples:
+Message: I paid once, but my bank shows two payments.
+Label: billing
+
+Message: The tracking number has not updated since Monday.
+Label: shipping
+
+Message: These pants do not fit. How can I exchange them?
+Label: returns
+
+Message: The checkout page freezes when I click Pay.
+Label: technical
+
+Message: What time does your store open?
+Label: other
+
+Return only the lowercase label. Do not include an explanation,
+punctuation, or the word "Label".
+"""
 
 CASES = [
     ("My card was charged twice for order 4412.", "billing"),
